@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>富泰邨 Fu Tai Estate - Bus ETA</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+            background: #000;
+            color: #fff;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #1a1a1a;
+        }
+
+        header {
+            background: #000;
+            padding: 20px;
+            border-bottom: 2px solid #333;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .station-name {
+            font-size: 1.8em;
+            font-weight: 300;
+            margin-bottom: 5px;
+        }
+
+        .station-info {
+            font-size: 0.9em;
+            color: #888;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .last-update {
+            font-size: 0.85em;
+            color: #666;
+        }
+
+        .loading-bar {
+            height: 2px;
+            background: #333;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .loading-bar.active::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 30%;
+            background: #0a84ff;
+            animation: loading 1.5s infinite;
+        }
+
+        @keyframes loading {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(400%); }
+        }
+
+        .eta-list {
+            padding: 0;
+        }
+
+        .eta-item {
+            display: flex;
+            align-items: center;
+            padding: 18px 20px;
+            border-bottom: 1px solid #2a2a2a;
+            transition: background 0.2s;
+        }
+
+        .eta-item:hover {
+            background: #222;
+        }
+
+        .route-badge {
+            min-width: 70px;
+            padding: 8px 12px;
+            background: #0a84ff;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1.1em;
+            text-align: center;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+
+        .route-badge.kmb { background: #d4380d; }
+        .route-badge.lwb { background: #fa8c16; }
+        .route-badge.mtr { background: #52c41a; }
+        .route-badge.gmb { background: #13c2c2; }
+        .route-badge.ctb { background: #1890ff; }
+
+        .route-info {
+            flex: 1;
+            min-width: 0;
+            margin-right: 15px;
+        }
+
+        .destination {
+            font-size: 1em;
+            margin-bottom: 2px;
+            line-height: 1.4;
+        }
+
+        .destination-tc {
+            font-size: 1em;
+            color: #fff;
+            font-weight: 500;
+        }
+
+        .destination-en {
+            font-size: 0.85em;
+            color: #aaa;
+            margin-top: 2px;
+        }
+
+        .operator {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .eta-times {
+            text-align: right;
+            min-width: 120px;
+            flex-shrink: 0;
+        }
+
+        .eta-main {
+            font-size: 1.6em;
+            font-weight: 600;
+            color: #0a84ff;
+            margin-bottom: 4px;
+        }
+
+        .eta-main.arriving {
+            color: #52c41a;
+            animation: pulse 1.5s infinite;
+        }
+
+        .eta-main.soon {
+            color: #fa8c16;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .eta-next {
+            font-size: 0.8em;
+            color: #666;
+        }
+
+        .no-eta {
+            padding: 60px 20px;
+            text-align: center;
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .error {
+            padding: 20px;
+            margin: 20px;
+            background: #2a1a1a;
+            border-left: 4px solid #d4380d;
+            border-radius: 4px;
+            color: #ff7875;
+        }
+
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: #0a84ff;
+            border: none;
+            color: white;
+            font-size: 1.5em;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(10, 132, 255, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+            z-index: 1000;
+        }
+
+        .refresh-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(10, 132, 255, 0.6);
+        }
+
+        .refresh-btn:active {
+            transform: scale(0.95);
+        }
+
+        .refresh-btn.spinning {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        footer {
+            padding: 30px 20px;
+            text-align: center;
+            font-size: 0.85em;
+            color: #666;
+            border-top: 1px solid #2a2a2a;
+        }
+
+        footer a {
+            color: #0a84ff;
+            text-decoration: none;
+        }
+
+        @media (max-width: 600px) {
+            .station-name {
+                font-size: 1.4em;
+            }
+
+            .route-badge {
+                min-width: 60px;
+                font-size: 1em;
+            }
+
+            .eta-main {
+                font-size: 1.3em;
+            }
+
+            .eta-times {
+                min-width: 100px;
+            }
+
+            .refresh-btn {
+                bottom: 20px;
+                right: 20px;
+            }
+
+            .destination-tc {
+                font-size: 0.95em;
+            }
+
+            .destination-en {
+                font-size: 0.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="station-name">富泰邨 Fu Tai Estate</div>
+            <div class="station-info">
+                <span>Stop ID: TM251 | 22.412°N, 113.983°E</span>
+                <span class="last-update" id="lastUpdate">Loading...</span>
+            </div>
+        </header>
+
+        <div class="loading-bar" id="loadingBar"></div>
+
+        <div class="eta-list" id="etaList">
+            <div class="no-eta">Loading bus arrivals...<br>載入巴士到站時間中...</div>
+        </div>
+
+        <footer>
+            <p>Data from <a href="https://data.gov.hk" target="_blank">data.gov.hk</a> | 資料來源：data.gov.hk</p>
+            <p style="margin-top: 8px; color: #555;">13 routes serving this stop | 本站提供13條路線服務</p>
+            <p style="margin-top: 5px; color: #555;">Auto-refresh every 30 seconds | 每30秒自動更新</p>
+        </footer>
+    </div>
+
+    <button class="refresh-btn" id="refreshBtn" aria-label="Refresh" title="Refresh / 重新整理">↻</button>
+
+    <script>
+        // Configuration for Fu Tai Estate / Lingnan University Stop TM251
+        const CONFIG = {
+            STOP_ID: 'E2AE7A37634C8FE5', // KMB API stop ID for TM251
+            STOP_CODE: 'TM251',
+            KMB_BASE: 'https://data.etabus.gov.hk/v1/transport/kmb',
+            CTB_BASE: 'https://rt.data.gov.hk/v2/transport/citybus',
+            REFRESH_INTERVAL: 30000, // 30 seconds
+            ROUTES: {
+                KMB: ['53', '67M', '67X', '258P', '261', '267X', '960S'],
+                LWB: ['A33X', 'E33P'],
+                MTR: ['K51', 'K51A', 'K58'],
+                CTB: ['B3A'],
+                GMB: ['46']
+            }
+        };
+
+        let refreshTimer = null;
+
+        // Utility Functions
+        function formatETA(minutes) {
+            if (minutes <= 0) return 'Arriving | 即將到達';
+            if (minutes === 1) return '1 min | 1 分鐘';
+            return `${minutes} min | ${minutes} 分鐘`;
+        }
+
+        function getETAClass(minutes) {
+            if (minutes <= 0) return 'arriving';
+            if (minutes <= 3) return 'soon';
+            return '';
+        }
+
+        function getOperatorClass(operator) {
+            if (operator === 'KMB') return 'kmb';
+            if (operator === 'LWB') return 'lwb';
+            if (operator === 'CTB') return 'ctb';
+            if (operator.startsWith('MTR')) return 'mtr';
+            if (operator.startsWith('GMB')) return 'gmb';
+            return '';
+        }
+
+        function getOperatorDisplay(operator) {
+            const names = {
+                'KMB': 'KMB 九巴',
+                'LWB': 'LWB 龍運',
+                'CTB': 'CTB 城巴',
+                'MTR Bus': 'MTR Bus 港鐵巴士',
+                'GMB': 'GMB 小巴'
+            };
+            return names[operator] || operator;
+        }
+
+        function updateLastUpdate() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-HK', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            document.getElementById('lastUpdate').textContent = `Updated 更新: ${timeStr}`;
+        }
+
+        async function fetchJSON(url) {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return await response.json();
+            } catch (error) {
+                console.error(`Error fetching ${url}:`, error);
+                return null;
+            }
+        }
+
+        // Fetch ETAs from different operators
+        async function fetchKMBETA() {
+            const data = await fetchJSON(`${CONFIG.KMB_BASE}/stop-eta/${CONFIG.STOP_ID}`);
+            if (!data || !data.data) return [];
+
+            return data.data.map(eta => ({
+                route: eta.route,
+                operator: 'KMB',
+                destination_tc: eta.dest_tc || eta.dest_en,
+                destination_en: eta.dest_en || eta.dest_tc,
+                direction: eta.dir,
+                sequence: eta.seq,
+                eta_time: eta.eta,
+                minutes: eta.eta ? Math.round((new Date(eta.eta) - new Date()) / 60000) : null,
+                remarks_en: eta.rmk_en,
+                remarks_tc: eta.rmk_tc,
+                timestamp: new Date(eta.data_timestamp).getTime()
+            })).filter(eta => eta.minutes !== null && eta.minutes >= -1);
+        }
+
+        async function fetchLWBETA() {
+            const routes = [...CONFIG.ROUTES.LWB];
+            const etas = [];
+
+            for (const route of routes) {
+                const data = await fetchJSON(`${CONFIG.CTB_BASE}/eta/CTB/${CONFIG.STOP_ID}/${route}`);
+                if (!data || !data.data) continue;
+
+                data.data.forEach(eta => {
+                    if (eta.eta) {
+                        etas.push({
+                            route: eta.route,
+                            operator: 'LWB',
+                            destination_tc: eta.dest_tc || eta.dest_en,
+                            destination_en: eta.dest_en || eta.dest_tc,
+                            direction: eta.dir,
+                            sequence: eta.seq,
+                            eta_time: eta.eta,
+                            minutes: Math.round((new Date(eta.eta) - new Date()) / 60000),
+                            remarks_en: eta.rmk_en,
+                            remarks_tc: eta.rmk_tc,
+                            timestamp: new Date().getTime()
+                        });
+                    }
+                });
+            }
+
+            return etas.filter(eta => eta.minutes >= -1);
+        }
+
+        async function fetchMTRETA() {
+            const data = await fetchJSON(`${CONFIG.KMB_BASE}/stop-eta/${CONFIG.STOP_ID}`);
+            if (!data || !data.data) return [];
+
+            const mtrRoutes = CONFIG.ROUTES.MTR;
+            return data.data
+                .filter(eta => mtrRoutes.includes(eta.route))
+                .map(eta => ({
+                    route: eta.route,
+                    operator: 'MTR Bus',
+                    destination_tc: eta.dest_tc || eta.dest_en,
+                    destination_en: eta.dest_en || eta.dest_tc,
+                    direction: eta.dir,
+                    sequence: eta.seq,
+                    eta_time: eta.eta,
+                    minutes: eta.eta ? Math.round((new Date(eta.eta) - new Date()) / 60000) : null,
+                    remarks_en: eta.rmk_en,
+                    remarks_tc: eta.rmk_tc,
+                    timestamp: new Date(eta.data_timestamp).getTime()
+                }))
+                .filter(eta => eta.minutes !== null && eta.minutes >= -1);
+        }
+
+        async function fetchCTBETA() {
+            const routes = CONFIG.ROUTES.CTB;
+            const etas = [];
+
+            for (const route of routes) {
+                const data = await fetchJSON(`${CONFIG.CTB_BASE}/eta/CTB/${CONFIG.STOP_ID}/${route}`);
+                if (!data || !data.data) continue;
+
+                data.data.forEach(eta => {
+                    if (eta.eta) {
+                        etas.push({
+                            route: eta.route,
+                            operator: 'CTB',
+                            destination_tc: eta.dest_tc || eta.dest_en,
+                            destination_en: eta.dest_en || eta.dest_tc,
+                            direction: eta.dir,
+                            sequence: eta.seq,
+                            eta_time: eta.eta,
+                            minutes: Math.round((new Date(eta.eta) - new Date()) / 60000),
+                            remarks_en: eta.rmk_en,
+                            remarks_tc: eta.rmk_tc,
+                            timestamp: new Date().getTime()
+                        });
+                    }
+                });
+            }
+
+            return etas.filter(eta => eta.minutes >= -1);
+        }
+
+        // Main fetch and render function
+        async function refreshETAs() {
+            const loadingBar = document.getElementById('loadingBar');
+            const refreshBtn = document.getElementById('refreshBtn');
+
+            loadingBar.classList.add('active');
+            refreshBtn.classList.add('spinning');
+
+            try {
+                // Fetch all ETAs in parallel
+                const [kmbETAs, lwbETAs, mtrETAs, ctbETAs] = await Promise.all([
+                    fetchKMBETA(),
+                    fetchLWBETA(),
+                    fetchMTRETA(),
+                    fetchCTBETA()
+                ]);
+
+                // Combine all ETAs
+                let allETAs = [...kmbETAs, ...lwbETAs, ...mtrETAs, ...ctbETAs];
+
+                // Group by route and direction
+                const grouped = {};
+                allETAs.forEach(eta => {
+                    const key = `${eta.route}-${eta.direction}-${eta.operator}`;
+                    if (!grouped[key]) {
+                        grouped[key] = {
+                            route: eta.route,
+                            operator: eta.operator,
+                            destination_tc: eta.destination_tc,
+                            destination_en: eta.destination_en,
+                            direction: eta.direction,
+                            etas: []
+                        };
+                    }
+                    grouped[key].etas.push(eta);
+                });
+
+                // Sort ETAs within each group and prepare final list
+                const displayList = [];
+                Object.values(grouped).forEach(group => {
+                    group.etas.sort((a, b) => a.minutes - b.minutes);
+                    const nextETAs = group.etas.slice(0, 3);
+
+                    displayList.push({
+                        route: group.route,
+                        operator: group.operator,
+                        destination_tc: group.destination_tc,
+                        destination_en: group.destination_en,
+                        mainETA: nextETAs[0],
+                        nextETAs: nextETAs.slice(1)
+                    });
+                });
+
+                // Sort by earliest arrival time
+                displayList.sort((a, b) => a.mainETA.minutes - b.mainETA.minutes);
+
+                // Render
+                renderETAList(displayList);
+                updateLastUpdate();
+
+            } catch (error) {
+                console.error('Error refreshing ETAs:', error);
+                showError('Failed to load bus arrivals. | 無法載入巴士到站資料。<br>Please try again. | 請重試。');
+            } finally {
+                loadingBar.classList.remove('active');
+                refreshBtn.classList.remove('spinning');
+            }
+        }
+
+        function renderETAList(list) {
+            const container = document.getElementById('etaList');
+
+            if (list.length === 0) {
+                container.innerHTML = '<div class="no-eta">No buses arriving soon<br>暫無巴士到站資料</div>';
+                return;
+            }
+
+            container.innerHTML = list.map(item => {
+                const mainMinutes = item.mainETA.minutes;
+                const nextTimesStr = item.nextETAs.length > 0
+                    ? item.nextETAs.map(eta => {
+                        if (eta.minutes <= 0) return 'Arr';
+                        return `${eta.minutes}m`;
+                      }).join(', ')
+                    : 'No further data | 沒有更多資料';
+
+                return `
+                    <div class="eta-item">
+                        <div class="route-badge ${getOperatorClass(item.operator)}">
+                            ${item.route}
+                        </div>
+                        <div class="route-info">
+                            <div class="destination">
+                                <div class="destination-tc">${item.destination_tc}</div>
+                                <div class="destination-en">${item.destination_en}</div>
+                            </div>
+                            <div class="operator">${getOperatorDisplay(item.operator)}</div>
+                        </div>
+                        <div class="eta-times">
+                            <div class="eta-main ${getETAClass(mainMinutes)}">
+                                ${mainMinutes <= 0 ? 'Arriving' : (mainMinutes === 1 ? '1 min' : mainMinutes + ' min')}
+                            </div>
+                            <div class="eta-next">${nextTimesStr}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function showError(message) {
+            const container = document.getElementById('etaList');
+            container.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        // Event Listeners
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            clearInterval(refreshTimer);
+            refreshETAs();
+            refreshTimer = setInterval(refreshETAs, CONFIG.REFRESH_INTERVAL);
+        });
+
+        // Initialize
+        window.addEventListener('DOMContentLoaded', () => {
+            refreshETAs();
+            refreshTimer = setInterval(refreshETAs, CONFIG.REFRESH_INTERVAL);
+        });
+
+        // Cleanup
+        window.addEventListener('beforeunload', () => {
+            if (refreshTimer) clearInterval(refreshTimer);
+        });
+    </script>
+</body>
+</html>
