@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>興發街 Hing Fat Street (Victoria Park) - Bus ETA</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+            background: #000;
+            color: #fff;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #1a1a1a;
+        }
+
+        header {
+            background: #000;
+            padding: 20px;
+            border-bottom: 2px solid #333;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .station-name {
+            font-size: 1.8em;
+            font-weight: 300;
+            margin-bottom: 5px;
+        }
+
+        .station-subtitle {
+            font-size: 0.9em;
+            color: #888;
+            margin-bottom: 10px;
+        }
+
+        .station-info {
+            font-size: 0.9em;
+            color: #888;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .last-update {
+            font-size: 0.85em;
+            color: #666;
+        }
+
+        .loading-bar {
+            height: 2px;
+            background: #333;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .loading-bar.active::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 30%;
+            background: #0a84ff;
+            animation: loading 1.5s infinite;
+        }
+
+        @keyframes loading {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(400%); }
+        }
+
+        .eta-list {
+            padding: 0;
+        }
+
+        .eta-item {
+            display: flex;
+            align-items: center;
+            padding: 18px 20px;
+            border-bottom: 1px solid #2a2a2a;
+            transition: background 0.2s;
+            cursor: pointer;
+        }
+
+        .eta-item:hover {
+            background: #222;
+        }
+
+        .route-badge {
+            min-width: 75px;
+            padding: 8px 12px;
+            background: #0a84ff;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1.1em;
+            text-align: center;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+
+        .route-badge.kmb { background: #d4380d; }
+        .route-badge.ctb { background: #1890ff; }
+        .route-badge.night { background: #722ed1; }
+
+        .route-info {
+            flex: 1;
+            min-width: 0;
+            margin-right: 15px;
+        }
+
+        .destination {
+            font-size: 1em;
+            margin-bottom: 2px;
+            line-height: 1.4;
+        }
+
+        .destination-tc {
+            font-size: 1em;
+            color: #fff;
+            font-weight: 500;
+        }
+
+        .destination-en {
+            font-size: 0.85em;
+            color: #aaa;
+            margin-top: 2px;
+        }
+
+        .fare-info {
+            font-size: 0.75em;
+            color: #52c41a;
+            margin-top: 4px;
+            font-weight: 600;
+        }
+
+        .operator {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .info-icon {
+            font-size: 0.9em;
+            color: #0a84ff;
+            margin-left: 8px;
+            opacity: 0.6;
+        }
+
+        .eta-times {
+            text-align: right;
+            min-width: 120px;
+            flex-shrink: 0;
+        }
+
+        .eta-main {
+            font-size: 1.6em;
+            font-weight: 600;
+            color: #0a84ff;
+            margin-bottom: 4px;
+        }
+
+        .eta-main.arriving {
+            color: #52c41a;
+            animation: pulse 1.5s infinite;
+        }
+
+        .eta-main.soon {
+            color: #fa8c16;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .eta-next {
+            font-size: 0.8em;
+            color: #666;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            animation: fadeIn 0.3s;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+            animation: slideUp 0.3s;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 2em;
+            color: #666;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+        }
+
+        .close-btn:hover {
+            color: #fff;
+        }
+
+        .modal-header {
+            margin-bottom: 20px;
+        }
+
+        .modal-route {
+            font-size: 2em;
+            font-weight: 600;
+            color: #0a84ff;
+        }
+
+        .modal-section {
+            margin: 20px 0;
+        }
+
+        .modal-section h3 {
+            font-size: 1.1em;
+            color: #888;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .modal-section p {
+            font-size: 1em;
+            line-height: 1.6;
+            color: #fff;
+        }
+
+        .fare-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .fare-item {
+            background: #2a2a2a;
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .fare-label {
+            font-size: 0.85em;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .fare-amount {
+            font-size: 1.3em;
+            color: #52c41a;
+            font-weight: 600;
+        }
+
+        .route-map-link {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: #0a84ff;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+
+        .route-map-link:hover {
+            background: #0066cc;
+        }
+
+        .no-eta {
+            padding: 60px 20px;
+            text-align: center;
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .error {
+            padding: 20px;
+            margin: 20px;
+            background: #2a1a1a;
+            border-left: 4px solid #d4380d;
+            border-radius: 4px;
+            color: #ff7875;
+        }
+
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: #0a84ff;
+            border: none;
+            color: white;
+            font-size: 1.5em;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(10, 132, 255, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+            z-index: 999;
+        }
+
+        .refresh-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(10, 132, 255, 0.6);
+        }
+
+        .refresh-btn:active {
+            transform: scale(0.95);
+        }
+
+        .refresh-btn.spinning {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        footer {
+            padding: 30px 20px;
+            text-align: center;
+            font-size: 0.85em;
+            color: #666;
+            border-top: 1px solid #2a2a2a;
+        }
+
+        footer a {
+            color: #0a84ff;
+            text-decoration: none;
+        }
+
+        @media (max-width: 600px) {
+            .station-name {
+                font-size: 1.4em;
+            }
+
+            .route-badge {
+                min-width: 65px;
+                font-size: 1em;
+            }
+
+            .eta-main {
+                font-size: 1.3em;
+            }
+
+            .eta-times {
+                min-width: 100px;
+            }
+
+            .refresh-btn {
+                bottom: 20px;
+                right: 20px;
+            }
+
+            .destination-tc {
+                font-size: 0.95em;
+            }
+
+            .destination-en {
+                font-size: 0.8em;
+            }
+
+            .fare-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .modal-content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="station-name">興發街 Hing Fat Street</div>
+            <div class="station-subtitle">Victoria Park, Causeway Bay 銅鑼灣維多利亞公園</div>
+            <div class="station-info">
+                <span>Stop ID: 001251 (CTB) | KMB: 13C75FFFA2BB060D, 42E86F97FAC8F719</span>
+                <span class="last-update" id="lastUpdate">Loading...</span>
+            </div>
+        </header>
+
+        <div class="loading-bar" id="loadingBar"></div>
+
+        <div class="eta-list" id="etaList">
+            <div class="no-eta">Loading bus arrivals...<br>載入巴士到站時間中...</div>
+        </div>
+
+        <footer>
+            <p>Data from <a href="https://data.gov.hk" target="_blank">data.gov.hk</a> | 資料來源：data.gov.hk</p>
+            <p style="margin-top: 8px; color: #555;">26 routes serving this stop | 本站提供26條路線服務</p>
+            <p style="margin-top: 5px; color: #555;">Fares shown are section fares from this stop | 車費為本站上車之分段收費</p>
+            <p style="margin-top: 5px; color: #555;">Auto-refresh every 30 seconds | 每30秒自動更新</p>
+        </footer>
+    </div>
+
+    <!-- Modal for route details -->
+    <div class="modal" id="routeModal">
+        <div class="modal-content">
+            <button class="close-btn" id="closeModal">×</button>
+            <div class="modal-header">
+                <div class="modal-route" id="modalRoute"></div>
+                <div style="color: #888; margin-top: 5px;" id="modalOperator"></div>
+            </div>
+            <div class="modal-section">
+                <h3>Destination 目的地</h3>
+                <p id="modalDestination"></p>
+            </div>
+            <div class="modal-section">
+                <h3>Fare from Hing Fat Street 由興發街上車車費</h3>
+                <div class="fare-grid">
+                    <div class="fare-item">
+                        <div class="fare-label">Adult Fare 成人車費</div>
+                        <div class="fare-amount" id="modalFareAdult">-</div>
+                    </div>
+                    <div class="fare-item">
+                        <div class="fare-label">Concessionary 優惠車費</div>
+                        <div class="fare-amount" id="modalFareConcession">-</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-section">
+                <h3>Route Information 路線資料</h3>
+                <p id="modalRouteInfo"></p>
+                <a href="#" id="modalMapLink" target="_blank" class="route-map-link">
+                    View Route Map 查看路線圖 →
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <button class="refresh-btn" id="refreshBtn" aria-label="Refresh" title="Refresh / 重新整理">↻</button>
+
+    <script>
+        // Configuration with CORRECT stop IDs
+        const CONFIG = {
+            KMB_STOP_IDS: ['13C75FFFA2BB060D', '42E86F97FAC8F719'],
+            CTB_STOP_ID: '001251',
+            STOP_CODE: '001251',
+            KMB_BASE: 'https://data.etabus.gov.hk/v1/transport/kmb',
+            CTB_BASE: 'https://rt.data.gov.hk/v2/transport/citybus',
+            REFRESH_INTERVAL: 30000
+        };
+
+        // CORRECTED section fares FROM Hing Fat Street (based on search results)
+        const FARE_DATA = {
+            // KMB Cross-harbour routes
+            '102': { adult: '$7.7', concession: '$3.9', info: 'Cross-harbour to Mei Foo via CHT (after CHT)', type: 'KMB' },
+            '103': { adult: '$7.0', concession: '$3.5', info: 'To Pokfield Road via Kowloon City', type: 'KMB' },
+            '106': { adult: '$7.9', concession: '$4.0', info: 'To Siu Sai Wan (Island Resort)', type: 'KMB' },
+            '170': { adult: '$6.1', concession: '$3.1', info: 'To Wah Fu after Aberdeen Tunnel', type: 'KMB' },
+            // New Territories routes (section fares after Eastern Harbour Tunnel/other tunnels)
+            '307': { adult: '$8.0', concession: '$4.0', info: 'To Central from Tai Po', type: 'KMB' },
+            '601P': { adult: '$8.0', concession: '$4.0', info: 'Express to Sheung Wan (AM peak)', type: 'KMB' },
+            '603': { adult: '$8.0', concession: '$4.0', info: 'To Central from Ping Tin', type: 'KMB' },
+            '621': { adult: '$8.0', concession: '$4.0', info: 'To Central from Laguna City', type: 'KMB' },
+            '673': { adult: '$9.0', concession: '$4.5', info: 'To Central from Sheung Shui', type: 'KMB' },
+            '673A': { adult: '$9.0', concession: '$4.5', info: 'To Central from Sheung Shui (variant)', type: 'KMB' },
+            '680X': { adult: '$9.0', concession: '$4.5', info: 'Express to Central from Wu Kai Sha', type: 'KMB' },
+            '681': { adult: '$9.8', concession: '$4.9', info: 'To Central from Ma On Shan (after EHC)', type: 'KMB' },
+            '681P': { adult: '$8.0', concession: '$4.0', info: 'Express to Sheung Wan (AM peak)', type: 'KMB' },
+            '690S': { adult: '$8.5', concession: '$4.3', info: 'Express to Central from Hang Hau', type: 'KMB' },
+            '961': { adult: '$5.5', concession: '$2.8', info: 'Short trip fare to Wan Chai from Causeway Bay', type: 'KMB' },
+            // Citybus routes (section fares from Hing Fat Street)
+            '2X': { adult: '$6.0', concession: '$3.0', info: 'To Exhibition Centre from Grand Promenade', type: 'CTB' },
+            '5X': { adult: '$4.3', concession: '$2.2', info: 'Causeway Bay circular route', type: 'CTB' },
+            '8': { adult: '$6.0', concession: '$3.0', info: 'To Exhibition Centre from Heng Fa Chuen', type: 'CTB' },
+            '8P': { adult: '$6.0', concession: '$3.0', info: 'To Exhibition Centre (peak variant)', type: 'CTB' },
+            '15B': { adult: '$5.8', concession: '$2.9', info: 'To Wan Chai from The Peak', type: 'CTB' },
+            'A11': { adult: '$6.8', concession: '$3.4', info: 'Short section to Airport (from Causeway Bay)', type: 'CTB' },
+            // Night buses
+            'N170': { adult: '$14.8', concession: '$14.8', info: 'Night service to Wah Fu (Central)', type: 'Night' },
+            'N368': { adult: '$28.0', concession: '$28.0', info: 'Night service to Central from Yuen Long', type: 'Night' },
+            'N373': { adult: '$30.0', concession: '$30.0', info: 'Night service to Central from Fanling', type: 'Night' },
+            'N8P': { adult: '$9.7', concession: '$9.7', info: 'Night circular service', type: 'Night' },
+            'NA11': { adult: '$45.0', concession: '$22.5', info: 'Night airport service to HZMB', type: 'Night' }
+        };
+
+        let refreshTimer = null;
+
+        function getETAClass(minutes) {
+            if (minutes <= 0) return 'arriving';
+            if (minutes <= 3) return 'soon';
+            return '';
+        }
+
+        function getOperatorClass(route) {
+            const fareInfo = FARE_DATA[route];
+            if (!fareInfo) return '';
+            if (fareInfo.type === 'KMB' || fareInfo.type === 'Night') return 'kmb';
+            if (fareInfo.type === 'CTB') return 'ctb';
+            return '';
+        }
+
+        function getOperatorDisplay(route) {
+            const fareInfo = FARE_DATA[route];
+            if (!fareInfo) return 'KMB/CTB 九巴/城巴';
+            if (fareInfo.type === 'KMB') return 'KMB 九巴';
+            if (fareInfo.type === 'CTB') return 'Citybus 城巴';
+            if (fareInfo.type === 'Night') {
+                if (route.startsWith('N8') || route.startsWith('NA')) {
+                    return 'Citybus 城巴 (Night 通宵)';
+                }
+                return 'KMB 九巴 (Night 通宵)';
+            }
+            return 'KMB/CTB 九巴/城巴';
+        }
+
+        function updateLastUpdate() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-HK', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            document.getElementById('lastUpdate').textContent = `Updated 更新: ${timeStr}`;
+        }
+
+        async function fetchJSON(url) {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return await response.json();
+            } catch (error) {
+                console.error(`Error fetching ${url}:`, error);
+                return null;
+            }
+        }
+
+        async function fetchKMBETA() {
+            const allETAs = [];
+
+            for (const stopId of CONFIG.KMB_STOP_IDS) {
+                const data = await fetchJSON(`${CONFIG.KMB_BASE}/stop-eta/${stopId}`);
+                if (!data || !data.data) continue;
+
+                const etas = data.data.map(eta => ({
+                    route: eta.route,
+                    destination_tc: eta.dest_tc || eta.dest_en,
+                    destination_en: eta.dest_en || eta.dest_tc,
+                    direction: eta.dir,
+                    eta_time: eta.eta,
+                    minutes: eta.eta ? Math.round((new Date(eta.eta) - new Date()) / 60000) : null,
+                    timestamp: new Date(eta.data_timestamp).getTime(),
+                    operator: 'KMB'
+                })).filter(eta => eta.minutes !== null && eta.minutes >= -1);
+
+                allETAs.push(...etas);
+            }
+
+            return allETAs;
+        }
+
+        async function fetchCTBETA() {
+            const ctbRoutes = ['2X', '5X', '8', '8P', '15B', 'A11', 'N8P', 'NA11'];
+            const etas = [];
+
+            for (const route of ctbRoutes) {
+                const data = await fetchJSON(`${CONFIG.CTB_BASE}/eta/CTB/${CONFIG.CTB_STOP_ID}/${route}`);
+                if (!data || !data.data) continue;
+
+                data.data.forEach(eta => {
+                    if (eta.eta) {
+                        etas.push({
+                            route: eta.route,
+                            destination_tc: eta.dest_tc || eta.dest_en,
+                            destination_en: eta.dest_en || eta.dest_tc,
+                            direction: eta.dir,
+                            eta_time: eta.eta,
+                            minutes: Math.round((new Date(eta.eta) - new Date()) / 60000),
+                            timestamp: new Date().getTime(),
+                            operator: 'CTB'
+                        });
+                    }
+                });
+            }
+
+            return etas.filter(eta => eta.minutes >= -1);
+        }
+
+        async function refreshETAs() {
+            const loadingBar = document.getElementById('loadingBar');
+            const refreshBtn = document.getElementById('refreshBtn');
+
+            loadingBar.classList.add('active');
+            refreshBtn.classList.add('spinning');
+
+            try {
+                const [kmbETAs, ctbETAs] = await Promise.all([
+                    fetchKMBETA(),
+                    fetchCTBETA()
+                ]);
+
+                let allETAs = [...kmbETAs, ...ctbETAs];
+
+                const grouped = {};
+                allETAs.forEach(eta => {
+                    const key = `${eta.route}-${eta.direction}`;
+                    if (!grouped[key]) {
+                        grouped[key] = {
+                            route: eta.route,
+                            destination_tc: eta.destination_tc,
+                            destination_en: eta.destination_en,
+                            direction: eta.direction,
+                            operator: eta.operator,
+                            etas: []
+                        };
+                    }
+                    grouped[key].etas.push(eta);
+                });
+
+                const displayList = [];
+                Object.values(grouped).forEach(group => {
+                    group.etas.sort((a, b) => a.minutes - b.minutes);
+                    const nextETAs = group.etas.slice(0, 3);
+
+                    displayList.push({
+                        route: group.route,
+                        destination_tc: group.destination_tc,
+                        destination_en: group.destination_en,
+                        operator: group.operator,
+                        mainETA: nextETAs[0],
+                        nextETAs: nextETAs.slice(1)
+                    });
+                });
+
+                displayList.sort((a, b) => a.mainETA.minutes - b.mainETA.minutes);
+
+                renderETAList(displayList);
+                updateLastUpdate();
+
+            } catch (error) {
+                console.error('Error refreshing ETAs:', error);
+                showError('Failed to load bus arrivals. | 無法載入巴士到站資料。<br>Please try again. | 請重試。');
+            } finally {
+                loadingBar.classList.remove('active');
+                refreshBtn.classList.remove('spinning');
+            }
+        }
+
+        function renderETAList(list) {
+            const container = document.getElementById('etaList');
+
+            if (list.length === 0) {
+                container.innerHTML = '<div class="no-eta">No buses arriving soon<br>暫無巴士到站資料</div>';
+                return;
+            }
+
+            container.innerHTML = list.map(item => {
+                const mainMinutes = item.mainETA.minutes;
+                const nextTimesStr = item.nextETAs.length > 0
+                    ? item.nextETAs.map(eta => eta.minutes <= 0 ? 'Arr' : `${eta.minutes}m`).join(', ')
+                    : 'No further data | 沒有更多資料';
+
+                const fareInfo = FARE_DATA[item.route];
+                const fareDisplay = fareInfo ? fareInfo.adult : 'N/A';
+
+                return `
+                    <div class="eta-item" onclick="showRouteDetails('${item.route}', '${item.destination_tc}', '${item.destination_en}')">
+                        <div class="route-badge ${getOperatorClass(item.route)}">
+                            ${item.route}
+                        </div>
+                        <div class="route-info">
+                            <div class="destination">
+                                <div class="destination-tc">${item.destination_tc}</div>
+                                <div class="destination-en">${item.destination_en}</div>
+                            </div>
+                            <div class="fare-info">💰 ${fareDisplay}</div>
+                            <div class="operator">${getOperatorDisplay(item.route)}<span class="info-icon">ⓘ</span></div>
+                        </div>
+                        <div class="eta-times">
+                            <div class="eta-main ${getETAClass(mainMinutes)}">
+                                ${mainMinutes <= 0 ? 'Arriving' : (mainMinutes === 1 ? '1 min' : mainMinutes + ' min')}
+                            </div>
+                            <div class="eta-next">${nextTimesStr}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function showRouteDetails(route, destTc, destEn) {
+            const modal = document.getElementById('routeModal');
+            const fareInfo = FARE_DATA[route];
+
+            if (!fareInfo) return;
+
+            document.getElementById('modalRoute').textContent = `Route ${route}`;
+            document.getElementById('modalOperator').textContent = getOperatorDisplay(route);
+            document.getElementById('modalDestination').textContent = `${destTc} / ${destEn}`;
+            document.getElementById('modalFareAdult').textContent = fareInfo.adult;
+            document.getElementById('modalFareConcession').textContent = fareInfo.concession;
+            document.getElementById('modalRouteInfo').textContent = fareInfo.info;
+
+            const mapUrl = fareInfo.type === 'CTB' || route.startsWith('N8') || route.startsWith('NA')
+                ? `https://www.citybus.com.hk/en/route/${route}`
+                : `https://search.kmb.hk/KMBWebSite/?action=routesearch&route=${route}&lang=en`;
+            document.getElementById('modalMapLink').href = mapUrl;
+
+            modal.classList.add('active');
+        }
+
+        function showError(message) {
+            const container = document.getElementById('etaList');
+            container.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            clearInterval(refreshTimer);
+            refreshETAs();
+            refreshTimer = setInterval(refreshETAs, CONFIG.REFRESH_INTERVAL);
+        });
+
+        document.getElementById('closeModal').addEventListener('click', () => {
+            document.getElementById('routeModal').classList.remove('active');
+        });
+
+        document.getElementById('routeModal').addEventListener('click', (e) => {
+            if (e.target.id === 'routeModal') {
+                document.getElementById('routeModal').classList.remove('active');
+            }
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            refreshETAs();
+            refreshTimer = setInterval(refreshETAs, CONFIG.REFRESH_INTERVAL);
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (refreshTimer) clearInterval(refreshTimer);
+        });
+    </script>
+</body>
+</html>
