@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>富泰邨站 Fu Tai Estate Station</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #0f1117;
+  color: #e8eaf6;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC', sans-serif;
+  min-height: 100vh;
+  padding: 16px;
+}
+
+header {
+  text-align: center;
+  padding: 16px 0 12px;
+  border-bottom: 1px solid #1e2235;
+  margin-bottom: 16px;
+}
+
+header h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+header p {
+  font-size: 0.9rem;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+#eta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.eta-card {
+  background: #161929;
+  border: 1px solid #1e2235;
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.eta-card:hover { background: #1a1f33; }
+
+.route-badge {
+  min-width: 90px;
+  text-align: center;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.badge-KMB { background: #7c1010; color: #ffd0d0; }
+.badge-LWB { background: #1a5c1a; color: #c8f5c8; }
+.badge-CTB { background: #0d3d7a; color: #c0d8ff; }
+
+.dest-block { flex: 1; min-width: 0; }
+
+.dest-zh {
+  font-size: 1.3rem;
+  font-weight: 500;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dest-en {
+  font-size: 0.95rem;
+  color: #718096;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 3px;
+}
+
+.fare-tag {
+  font-size: 0.88rem;
+  color: #f6ad55;
+  margin-top: 4px;
+}
+
+.eta-times {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* 1st ETA */
+.eta-pill-first {
+  font-size: 1.5rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* 2nd & 3rd ETA */
+.eta-pill {
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.eta-arriving { background: #14532d; color: #86efac; }
+.eta-soon     { background: #78350f; color: #fcd34d; }
+.eta-normal   { background: #1e2235; color: #a0aec0; }
+
+.loading-state, .error-state, .no-service {
+  text-align: center;
+  padding: 40px 20px;
+  color: #4b5563;
+  font-size: 0.95rem;
+}
+
+.spinner {
+  display: inline-block;
+  width: 24px; height: 24px;
+  border: 2px solid #2d3149;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin-bottom: 10px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>富泰邨站 近嶺大運動場</h1>
+  <p>Fu Tai Estate Station near LU Sports Ground</p>
+</header>
+
+<div id="eta-list">
+  <div class="loading-state"><div class="spinner"></div><br>Loading ETAs...</div>
+</div>
+
+<script>
+var CONFIG = {
+  KMB_STOP_ID: 'B954B8082D1AA9B0',
+  LWB_STOP_ID: '2BEAF37792BFDCCA',
+  CTB_STOP_ID: '003261',
+  KMB_ROUTES: ['53','67A','67M','67X','258P','261','267X','960C'],
+  LWB_ROUTES: ['E33P','NA33'],
+  CTB_ROUTES: ['B3A'],
+  KMB_BASE: 'https://data.etabus.gov.hk/v1/transport/kmb',
+  CTB_BASE: 'https://rt.data.gov.hk/v2/transport/citybus',
+  REFRESH_INTERVAL: 30000,
+  DEPARTED_THRESHOLD: -60
+};
+
+var FARES = {
+  'KMB_53':   { adult: '$10.0', conc: '$5.0' },
+  'KMB_67A':  { adult: '$10.8', conc: '$5.4' },
+  'KMB_67M':  { adult: '$10.8', conc: '$5.4' },
+  'KMB_67X':  { adult: '$14.6', conc: '$7.3' },
+  'KMB_258P': { adult: '$13.4', conc: '$6.7' },
+  'KMB_261':  { adult: '$10.8', conc: '$5.4' },
+  'KMB_267X': { adult: '$18.8', conc: '$9.4' },
+  'KMB_960C': { adult: '$24.0', conc: '$12.0' },
+  'LWB_E33P': { adult: '$12.4', conc: '$6.2' },
+  'LWB_NA33': { adult: '$29.3', conc: '$14.7' },
+  'CTB_B3A':  { adult: '$16.5', conc: '$8.3' }
+};
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function toSentenceCase(str) {
+  if (!str) return '';
+  var s = str.trim();
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+function fetchJSON(url) {
+  return fetch(url).then(function(res) {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  });
+}
+
+function secondsUntil(etaStr) {
+  if (!etaStr) return null;
+  return (new Date(etaStr) - Date.now()) / 1000;
+}
+
+function etaPill(secs, isFirst) {
+  if (secs === null) return '';
+  var mins = Math.round(secs / 60);
+  var sizeClass = isFirst ? 'eta-pill-first' : 'eta-pill';
+  var colorClass = mins <= 0 ? 'eta-arriving' : mins <= 5 ? 'eta-soon' : 'eta-normal';
+  var label = mins <= 0 ? 'Arriving' : mins + ' min';
+  return '<span class="' + sizeClass + ' ' + colorClass + '">' + label + '</span>';
+}
+
+function getKmbEtas() {
+  return fetchJSON(CONFIG.KMB_BASE + '/stop-eta/' + CONFIG.KMB_STOP_ID)
+    .then(function(data) {
+      if (!data || !data.data) return [];
+      return data.data.filter(function(e) {
+        return CONFIG.KMB_ROUTES.indexOf(e.route) !== -1;
+      }).map(function(e) { return Object.assign({}, e, {_operator: 'KMB'}); });
+    })
+    .catch(function() { return []; });
+}
+
+function getLwbEtas() {
+  return fetchJSON(CONFIG.KMB_BASE + '/stop-eta/' + CONFIG.LWB_STOP_ID)
+    .then(function(data) {
+      if (!data || !data.data) return [];
+      return data.data.filter(function(e) {
+        return CONFIG.LWB_ROUTES.indexOf(e.route.toUpperCase()) !== -1;
+      }).map(function(e) {
+        return Object.assign({}, e, {_operator: 'LWB', route: e.route.toUpperCase()});
+      });
+    })
+    .catch(function() { return []; });
+}
+
+function getCtbEtas() {
+  var promises = CONFIG.CTB_ROUTES.map(function(route) {
+    var url = CONFIG.CTB_BASE + '/eta/CTB/' + CONFIG.CTB_STOP_ID + '/' + route;
+    return fetchJSON(url)
+      .then(function(data) {
+        if (!data || !data.data) return [];
+        return data.data.map(function(e) {
+          return Object.assign({}, e, {_operator: 'CTB', route: route});
+        });
+      })
+      .catch(function() { return []; });
+  });
+  return Promise.all(promises).then(function(arrays) {
+    return arrays.reduce(function(acc, arr) { return acc.concat(arr); }, []);
+  });
+}
+
+function groupAndSort(allEtas) {
+  var groups = {};
+  allEtas.forEach(function(e) {
+    var key = e._operator + '_' + e.route;
+    if (!groups[key]) {
+      groups[key] = {
+        route: e.route,
+        operator: e._operator,
+        dest_en: e.dest_en || e.rmk_en || '',
+        dest_tc: e.dest_tc || e.rmk_tc || '',
+        etas: []
+      };
+    }
+    var secs = secondsUntil(e.eta);
+    if (secs !== null && secs < CONFIG.DEPARTED_THRESHOLD) return;
+    if (secs === null) return;
+    groups[key].etas.push({ secs: secs, seq: e.eta_seq || 99 });
+  });
+
+  var result = Object.values(groups).filter(function(g) { return g.etas.length > 0; });
+  result.forEach(function(g) {
+    g.etas.sort(function(a, b) { return a.seq - b.seq; });
+    g.sortKey = g.etas[0].secs;
+  });
+  result.sort(function(a, b) { return a.sortKey - b.sortKey; });
+  return result;
+}
+
+function renderGroups(groups) {
+  var list = document.getElementById('eta-list');
+  if (!groups.length) {
+    list.innerHTML = '<div class="no-service">No buses with live ETA right now.</div>';
+    return;
+  }
+  var html = '';
+  groups.forEach(function(g) {
+    var fareKey = g.operator + '_' + g.route;
+    var fare = FARES[fareKey];
+    var fareHtml = fare
+      ? '<div class="fare-tag">Adult ' + escapeHtml(fare.adult) + ' &nbsp;|&nbsp; Conc. ' + escapeHtml(fare.conc) + '</div>'
+      : '';
+    var badgeClass = 'badge-' + g.operator;
+    var pillsHtml = g.etas.slice(0, 3).map(function(e, idx) {
+      return etaPill(e.secs, idx === 0);
+    }).join('');
+    var destEn = toSentenceCase(g.dest_en);
+    html += '<div class="eta-card">'
+      + '<div class="route-badge ' + escapeHtml(badgeClass) + '">' + escapeHtml(g.route) + '</div>'
+      + '<div class="dest-block">'
+      + '<div class="dest-zh">' + escapeHtml(g.dest_tc) + '</div>'
+      + '<div class="dest-en">' + escapeHtml(destEn) + '</div>'
+      + fareHtml
+      + '</div>'
+      + '<div class="eta-times">' + pillsHtml + '</div>'
+      + '</div>';
+  });
+  list.innerHTML = html;
+}
+
+function loadAll() {
+  Promise.all([getKmbEtas(), getLwbEtas(), getCtbEtas()])
+    .then(function(results) {
+      var allEtas = results[0].concat(results[1]).concat(results[2]);
+      var groups = groupAndSort(allEtas);
+      renderGroups(groups);
+    })
+    .catch(function(err) {
+      document.getElementById('eta-list').innerHTML =
+        '<div class="error-state">Failed to load data.<br><small>' + escapeHtml(err.message) + '</small></div>';
+    });
+}
+
+loadAll();
+setInterval(loadAll, CONFIG.REFRESH_INTERVAL);
+</script>
+</body>
+</html>
