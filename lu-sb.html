@@ -7,7 +7,7 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0f1117;color:#e8eaf6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans TC',sans-serif;min-height:100vh;padding:16px}
-header{text-align:center;padding:16px 0 12px;border-bottom:1px solid #1e2235;margin-bottom:16px}
+header{text-align:center;padding:16px 0 12px;border-bottom:1px solid #1e2235;margin-bottom:16px;position:relative}
 header h1{font-size:1.4rem;font-weight:700;color:#fff;letter-spacing:.5px}
 #eta-list{display:flex;flex-direction:column;gap:10px;max-width:640px;margin:0 auto}
 .eta-card{background:#161929;border:1px solid #1e2235;border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:14px}
@@ -29,10 +29,15 @@ header h1{font-size:1.4rem;font-weight:700;color:#fff;letter-spacing:.5px}
 .loading-state,.error-state,.no-service{text-align:center;padding:40px 20px;color:#4b5563;font-size:.95rem}
 .spinner{display:inline-block;width:24px;height:24px;border:2px solid #2d3149;border-top-color:#6366f1;border-radius:50%;animation:spin .7s linear infinite;margin-bottom:10px}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* Refresh indicator */
+#refresh-status{display:inline-block;margin-left:10px;font-size:0.8rem;color:#718096;vertical-align:middle}
+#refresh-status .spinner-small{display:inline-block;width:14px;height:14px;border:2px solid #2d3149;border-top-color:#6366f1;border-radius:50%;animation:spin .7s linear infinite;margin-right:5px;vertical-align:middle}
 </style>
 </head>
 <body>
-<header><h1>嶺南大學 南行</h1></header>
+<header>
+  <h1>嶺南大學 南行 <span id="refresh-status"></span></h1>
+</header>
 <div id="eta-list">
   <div class="loading-state"><div class="spinner"></div><br>Loading ETAs...</div>
 </div>
@@ -66,6 +71,14 @@ var FARES = {
   'LWB_E33P': {adult:'$12.4', conc:'$6.2'}
 };
 
+// Fallback destinations for MTR routes (southbound from Lingnan University)
+// Based on known routes; adjust if needed.
+var MTR_DEST_MAP = {
+  'K51':  { tc: '屯門站', en: 'Tuen Mun Station' },
+  'K51A': { tc: '屯門站', en: 'Tuen Mun Station' },
+  'K58':  { tc: '青山灣', en: 'Castle Peak Bay' }   // Verify actual destination
+};
+
 function escapeHtml(s){
   if(!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -83,19 +96,28 @@ function postJSON(url,body){
     .then(function(r){if(!r.ok) throw new Error('HTTP '+r.status); return r.json();});
 }
 
-// Convert MTR "HH:MM" departureTimeText to seconds from now
+// Enhanced MTR time parsing: handles "HH:MM", "Due", "Arriving", "X min", "Departed"
 function mtrTextToSeconds(text){
   if(!text) return null;
   var lower = text.toLowerCase().trim();
-  if(lower==='arriving'||lower==='-'||lower==='--') return 0;
+  // Exact matches for imminent buses
+  if(lower === 'arriving' || lower === 'due' || lower === '0' || lower === '-' || lower === '--') return 0;
+  // Departed buses (ignore)
+  if(lower.includes('departed')) return null;
+  // Extract number of minutes (e.g., "5 min", "5 mins", "5minutes")
+  var minMatch = lower.match(/(\d+)\s*min/);
+  if(minMatch) return parseInt(minMatch[1], 10) * 60;
+  // HH:MM format (e.g., "14:30")
   var m = text.match(/^(\d{1,2}):(\d{2})$/);
-  if(!m) return null;
-  var now = new Date();
-  var target = new Date();
-  target.setHours(parseInt(m[1],10), parseInt(m[2],10), 0, 0);
-  var secs = (target - now) / 1000;
-  if(secs < -3600) secs += 86400; // past midnight wrap
-  return secs;
+  if(m) {
+    var now = new Date();
+    var target = new Date();
+    target.setHours(parseInt(m[1],10), parseInt(m[2],10), 0, 0);
+    var secs = (target - now) / 1000;
+    if(secs < -3600) secs += 86400; // past midnight wrap
+    return secs;
+  }
+  return null; // unparseable
 }
 
 function secondsUntil(etaStr){
@@ -125,24 +147,31 @@ function getKmbLikeEtas(stopId, routes, operator){
 }
 
 // Fetch one MTR route, keep only stops whose busStopId ends with "U030"
+// and extract actual destination from bus object if available.
 function getMtrRoute(routeName){
   return postJSON(CONFIG.MTR_URL, {language:'en', routeName: routeName})
     .then(function(data){
       var stops = (data.busStop || []).filter(function(s){
-        return s.busStopId.toUpperCase().endsWith('U030');
+        return s.busStopId && s.busStopId.toUpperCase().endsWith('U030');
       });
       var out = [];
       stops.forEach(function(stop){
         (stop.bus || []).forEach(function(bus, i){
           var secs = mtrTextToSeconds(bus.departureTimeText || null);
           if(secs === null) return;
+          // Try to get destination from bus object, fallback to hardcoded map
+          var destTc = bus.destination_tc || (MTR_DEST_MAP[routeName] ? MTR_DEST_MAP[routeName].tc : '');
+          var destEn = bus.destination_en || (MTR_DEST_MAP[routeName] ? MTR_DEST_MAP[routeName].en : '');
+          // If still empty, use stop name as last resort (but should not happen)
+          if(!destTc) destTc = stop.busStopName || '';
+          if(!destEn) destEn = stop.busStopName || '';
           out.push({
             _operator: 'MTR',
             route: routeName,
             _secs: secs,
             eta_seq: i + 1,
-            dest_tc: stop.busStopName || '',
-            dest_en: stop.busStopName || ''
+            dest_tc: destTc,
+            dest_en: destEn
           });
         });
       });
@@ -175,7 +204,8 @@ function groupAndSort(all){
 
   var result = Object.values(groups).filter(function(g){return g.etas.length>0;});
   result.forEach(function(g){
-    g.etas.sort(function(a,b){return a.seq-b.seq;});
+    // Sort ETAs by time ascending, then by sequence (for MTR order)
+    g.etas.sort(function(a,b){ return a.secs - b.secs || a.seq - b.seq; });
     g.sortKey = g.etas[0].secs;
   });
   result.sort(function(a,b){return a.sortKey-b.sortKey;});
@@ -212,23 +242,43 @@ function render(groups){
   list.innerHTML = html;
 }
 
-// ── Load All ──────────────────────────────────────────────────
+// ── Load All with refresh indicator and recursive timeout ─────
+
+var refreshStatus = document.getElementById('refresh-status');
+var refreshTimer = null;
+
+function showRefreshing(active) {
+  if(active) {
+    refreshStatus.innerHTML = '<span class="spinner-small"></span> Updating...';
+  } else {
+    refreshStatus.innerHTML = '';
+  }
+}
 
 function loadAll(){
+  showRefreshing(true);
   Promise.all([
     getKmbLikeEtas(KMB_STOP_ID, KMB_ROUTES, 'KMB'),
     getKmbLikeEtas(LWB_STOP_ID, LWB_ROUTES, 'LWB'),
     getAllMtrEtas()
   ]).then(function(results){
     render(groupAndSort(results[0].concat(results[1]).concat(results[2])));
+    showRefreshing(false);
   }).catch(function(err){
     document.getElementById('eta-list').innerHTML=
       '<div class="error-state">Failed to load data.<br><small>'+escapeHtml(err.message)+'</small></div>';
+    showRefreshing(false);
+  }).finally(function() {
+    // Schedule next update after current one completes + interval
+    if(refreshTimer) clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(loadAll, CONFIG.REFRESH_INTERVAL);
   });
 }
 
+// Initial load
 loadAll();
-setInterval(loadAll, CONFIG.REFRESH_INTERVAL);
+
+// No setInterval – using recursive setTimeout to avoid overlapping calls
 </script>
 </body>
 </html>
