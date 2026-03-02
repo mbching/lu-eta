@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lingnan Smart Campus – CSDI + HKO live</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel-bg: #151a2b;
+      --accent: #3fa9f5;
+      --accent-soft: rgba(63,169,245,0.2);
+      --text-main: #f5f7ff;
+      --text-muted: #9ca3c7;
+      --border-subtle: #2a3148;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text-main);
+    }
+    #app {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+    }
+    #sidebar {
+      width: 340px;
+      max-width: 100%;
+      background: var(--panel-bg);
+      border-right: 1px solid var(--border-subtle);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow-y: auto;
+    }
+    #map {
+      flex: 1;
+      background: #0a0e1a;
+    }
+    .app-title {
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .app-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    /* Tab bar */
+    .tab-bar {
+      display: flex;
+      gap: 8px;
+      margin: 8px 0 4px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .tab {
+      padding: 6px 12px;
+      font-size: 12px;
+      background: transparent;
+      color: var(--text-muted);
+      border: none;
+      cursor: pointer;
+      border-radius: 20px 20px 0 0;
+      transition: 0.2s;
+    }
+    .tab.active {
+      background: var(--accent-soft);
+      color: var(--text-main);
+      border-bottom: 2px solid var(--accent);
+    }
+    .mode-toggle {
+      display: inline-flex;
+      border-radius: 999px;
+      background: #0f1424;
+      border: 1px solid var(--border-subtle);
+      overflow: hidden;
+      margin-top: 6px;
+    }
+    .mode-toggle button {
+      flex: 1;
+      padding: 5px 10px;
+      font-size: 11px;
+      background: transparent;
+      color: var(--text-muted);
+      border: none;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .mode-toggle button.active {
+      background: var(--accent-soft);
+      color: var(--text-main);
+    }
+    .section-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+    .layer-group {
+      margin-bottom: 6px;
+      border-radius: 8px;
+      padding: 8px 8px 4px;
+      background: #111628;
+      border: 1px solid var(--border-subtle);
+    }
+    .layer-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 6px 0;
+      font-size: 13px;
+    }
+    .layer-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .layer-color {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+    }
+    .switch input { display:none; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #3b425a;
+      border-radius: 20px;
+      transition: .2s;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 2px;
+      bottom: 2px;
+      background-color: white;
+      border-radius: 50%;
+      transition: .2s;
+    }
+    input:checked + .slider {
+      background-color: var(--accent);
+    }
+    input:checked + .slider:before {
+      transform: translateX(16px);
+    }
+    /* Preview panel */
+    #preview-panel {
+      display: none; /* hidden by default, shown when preview tab active */
+      padding: 8px 4px;
+    }
+    .preview-stats {
+      background: #111628;
+      border-radius: 8px;
+      padding: 12px;
+      border: 1px solid var(--border-subtle);
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 6px 0;
+      font-size: 13px;
+    }
+    .stat-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .stat-value {
+      background: #0f1424;
+      padding: 2px 8px;
+      border-radius: 12px;
+      color: var(--accent);
+      font-weight: 600;
+    }
+    #statusbar {
+      font-size: 11px;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 8px;
+      margin-top: auto;
+    }
+    #status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-radius: 50%;
+      border-top-color: var(--accent);
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #legend {
+      font-size: 11px;
+      margin-top: 6px;
+      color: var(--text-muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    #legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    #legend span .swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+    }
+    .wind-arrow {
+      font-size: 18px;
+      line-height: 1;
+      text-shadow: 0 0 2px black;
+      transform-origin: center center;
+      color: #ef4444;
+      font-weight: bold;
+      background: rgba(0,0,0,0.5);
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid white;
+    }
+    .reset-btn {
+      background: var(--accent-soft);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      cursor: pointer;
+      margin-left: 8px;
+    }
+    @media (max-width: 768px) {
+      #app { flex-direction: column-reverse; }
+      #sidebar { width: 100%; height: 40vh; }
+      #map { height: 60vh; }
+      .switch { width: 40px; height: 22px; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <div>
+      <div class="app-title">
+        <span>🌿 Lingnan Smart Campus</span>
+        <button class="reset-btn" id="resetViewBtn" title="Reset to Lingnan University">↺ Reset</button>
+      </div>
+      <div class="app-subtitle">
+        Real‑time infrastructure from CSDI · Wind from HKO · Tuen Mun
+      </div>
+      <div class="mode-toggle">
+        <button id="mode2d" class="active">🗺️ Map 2D</button>
+        <button id="mode3d">🏢 Buildings 3D</button>
+      </div>
+    </div>
+
+    <!-- Tab bar: Layers / Preview -->
+    <div class="tab-bar">
+      <button id="tabLayers" class="tab active">📋 Layers</button>
+      <button id="tabPreview" class="tab">👁️ Preview</button>
+    </div>
+
+    <!-- Layers panel (visible by default) -->
+    <div id="layers-panel">
+      <div class="section-title">🏗️ Infrastructure</div>
+      <div class="layer-group" id="group-infra"></div>
+
+      <div class="section-title">🌦️ Environment & Weather</div>
+      <div class="layer-group" id="group-env"></div>
+    </div>
+
+    <!-- Preview panel (hidden initially) -->
+    <div id="preview-panel">
+      <div class="preview-stats">
+        <div class="stat-row">
+          <span class="stat-label"><span class="layer-color" style="background:#3fa9f5"></span> Drainage</span>
+          <span class="stat-value" id="stat-drainage">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label"><span class="layer-color" style="background:#f59e0b"></span> Roads</span>
+          <span class="stat-value" id="stat-roads">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label"><span class="layer-color" style="background:#22c55e"></span> Trees</span>
+          <span class="stat-value" id="stat-trees">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label"><span class="layer-color" style="background:#ef4444"></span> Wind stations</span>
+          <span class="stat-value" id="stat-wind">0</span>
+        </div>
+        <div style="margin-top:8px; font-size:11px; color:var(--text-muted);">
+          Counts shown are for the current viewport.
+        </div>
+      </div>
+    </div>
+
+    <div id="statusbar">
+      <div id="status">Ready. Toggle layers to load data.</div>
+      <div id="legend">
+        <span><span class="swatch" style="background:#3fa9f5"></span>Drainage</span>
+        <span><span class="swatch" style="background:#f59e0b"></span>Roads</span>
+        <span><span class="swatch" style="background:#22c55e"></span>Trees</span>
+        <span><span class="swatch" style="background:#ef4444"></span>Wind</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+</div>
+
+<script>
+  (function() {
+    // --- Lingnan University (Tuen Mun) ---
+    const lingnanCoords = [22.4123, 113.9826];
+    const map = L.map('map').setView(lingnanCoords, 16);
+    const statusEl = document.getElementById('status');
+
+    // CSDI base map (terrain / hybrid)
+    const baseLayer = L.tileLayer(
+      'https://api.csdi.gov.hk/imap/?x={x}&y={y}&z={z}&type=tdt&lang=en&sr=84',
+      { attribution: '© CSDI / LandsD / HKO / DSD / TD', maxZoom: 19 }
+    ).addTo(map);
+
+    // Helper: get current view bbox (EPSG:4326) as "minx,miny,maxx,maxy"
+    function getViewBBox() {
+      const b = map.getBounds();
+      return `${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`;
+    }
+
+    // --- Debounce utility ---
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
+
+    // --- Layer configurations (using public CSDI WFS + HKO open data) ---
+    const layerConfigs = [
+      {
+        id: 'drainage',
+        label: 'Drainage (DSD)',
+        color: '#3fa9f5',
+        group: 'infra',
+        type: 'wfs',
+        baseUrl: 'https://api.csdi.gov.hk/geoserver/dsd/ows',
+        typeName: 'dsd:STORMWATER_PIPE',
+        style: () => ({ color: '#3fa9f5', weight: 2, opacity: 0.8 }),
+        popup: (f, l) => {
+          const dia = f.properties.diameter || f.properties.DIAMETER || f.properties.DIA || 'unknown';
+          l.bindPopup(`<b>Stormwater pipe</b><br>Diameter: ${dia} mm`);
+        }
+      },
+      {
+        id: 'roads',
+        label: 'Road network (TD)',
+        color: '#f59e0b',
+        group: 'infra',
+        type: 'wfs',
+        baseUrl: 'https://api.csdi.gov.hk/geoserver/td/ows',
+        typeName: 'td:ROAD_NETWORK',
+        style: () => ({ color: '#f59e0b', weight: 3, opacity: 0.8 }),
+        popup: (f, l) => {
+          const name = f.properties.road_name || f.properties.ROAD_NAME || f.properties.name || 'Unnamed road';
+          l.bindPopup(`<b>Road</b><br>${name}`);
+        }
+      },
+      {
+        id: 'trees',
+        label: 'Trees (species)',
+        color: '#22c55e',
+        group: 'env',
+        type: 'wfs',
+        baseUrl: 'https://api.csdi.gov.hk/geoserver/ard/ows',
+        typeName: 'ard:TREE_DSD',
+        style: () => ({ radius: 5, fillColor: '#22c55e', color: '#14532d', weight: 1, fillOpacity: 0.8 }),
+        popup: (f, l) => {
+          const sp = f.properties.species || f.properties.SPECIES || f.properties.SPECIES_ENG || 'Unknown species';
+          l.bindPopup(`<b>Tree</b><br>${sp}`);
+        },
+        isPoint: true
+      },
+      {
+        id: 'wind',
+        label: 'Wind (HKO 10‑min)',
+        color: '#ef4444',
+        group: 'env',
+        type: 'api-wind'
+      }
+    ];
+
+    const layerGroups = {};       // id -> Leaflet layer group
+    const layerStats = {          // stores feature counts per layer
+      drainage: 0,
+      roads: 0,
+      trees: 0,
+      wind: 0
+    };
+
+    // --- Safe URL builder for WFS ---
+    function buildWfsUrl(cfg, bbox) {
+      const url = new URL(cfg.baseUrl);
+      const params = {
+        service: 'WFS',
+        version: '2.0.0',
+        request: 'GetFeature',
+        typeName: cfg.typeName,
+        outputFormat: 'application/json',
+        srsName: 'EPSG:4326',
+        bbox: bbox,
+        count: '1500'   // limit features for performance
+      };
+      Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+      return url.toString();
+    }
+
+    // --- Update preview stats in UI ---
+    function updatePreviewStats() {
+      document.getElementById('stat-drainage').textContent = layerStats.drainage;
+      document.getElementById('stat-roads').textContent = layerStats.roads;
+      document.getElementById('stat-trees').textContent = layerStats.trees;
+      document.getElementById('stat-wind').textContent = layerStats.wind;
+    }
+
+    // --- Generic WFS loader (with bbox) ---
+    async function loadWfsLayer(cfg) {
+      const lg = layerGroups[cfg.id];
+      if (!lg) return;
+      showLoading(`⬇️ Loading ${cfg.label}...`);
+      try {
+        const bbox = getViewBBox();
+        const url = buildWfsUrl(cfg, bbox);
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const geojson = await res.json();
+        lg.clearLayers();
+
+        const layer = L.geoJSON(geojson, {
+          style: cfg.isPoint ? undefined : cfg.style,
+          pointToLayer: cfg.isPoint ? (f, latlng) => L.circleMarker(latlng, cfg.style()) : undefined,
+          onEachFeature: cfg.popup
+        });
+        layer.addTo(lg);
+
+        const featCount = geojson.features ? geojson.features.length : 0;
+        layerStats[cfg.id] = featCount;
+        updatePreviewStats();
+        showReady(`✅ ${featCount} ${cfg.label.toLowerCase()} feature(s) loaded.`);
+      } catch (e) {
+        console.warn(e);
+        layerStats[cfg.id] = 0;
+        updatePreviewStats();
+        showReady(`❌ Failed to load ${cfg.label}. Check console or retry.`);
+      }
+    }
+
+    // --- HKO wind loader with station bounds filtering ---
+    async function loadWindLayer() {
+      const lg = layerGroups['wind'];
+      if (!lg) return;
+      lg.clearLayers();
+      showLoading('🌬️ Fetching wind (HKO stations)...');
+
+      try {
+        // Station list (contains lat/lon)
+        const stationRes = await fetch('https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=weatherStationList&lang=en');
+        const stationData = await stationRes.json();
+        const stations = stationData.weatherStationList || [];
+
+        const stationMap = new Map();
+        stations.forEach(s => {
+          if (s.code && s.lat && s.lon) {
+            stationMap.set(s.code.toUpperCase(), { lat: s.lat, lon: s.lon, name: s.name });
+          }
+        });
+
+        // Wind readings
+        const windRes = await fetch('https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=en');
+        const windData = await windRes.json();
+        const windReadings = windData.wind || [];
+
+        if (windReadings.length === 0) {
+          layerStats.wind = 0;
+          updatePreviewStats();
+          showReady('🌬️ No wind data available now.');
+          return;
+        }
+
+        const bounds = map.getBounds();
+        let added = 0;
+
+        windReadings.forEach(item => {
+          const stationCode = item.station ? item.station.toUpperCase() : null;
+          if (!stationCode) return;
+          const stationInfo = stationMap.get(stationCode);
+          if (!stationInfo) return;
+
+          const lat = stationInfo.lat;
+          const lon = stationInfo.lon;
+          if (!bounds.contains([lat, lon])) return;  // only show visible stations
+
+          const speed = item.speed || 0;
+          const direction = item.direction || 0;
+          const stationName = stationInfo.name || stationCode;
+
+          // Styled arrow with background
+          const arrowIcon = L.divIcon({
+            className: 'wind-arrow',
+            html: `<div style="transform:rotate(${direction}deg);">➤</div>`,
+            iconSize: [24, 24],
+            popupAnchor: [0, -12]
+          });
+
+          const marker = L.marker([lat, lon], { icon: arrowIcon })
+            .bindPopup(`
+              <b>${stationName}</b><br>
+              Wind: ${speed} km/h<br>
+              Direction: ${direction}°
+            `);
+          marker.addTo(lg);
+          added++;
+        });
+
+        layerStats.wind = added;
+        updatePreviewStats();
+        showReady(`🌬️ Wind: ${added} stations shown (within view).`);
+      } catch (e) {
+        console.error(e);
+        layerStats.wind = 0;
+        updatePreviewStats();
+        showReady('❌ Wind data error. Check network.');
+      }
+    }
+
+    // --- Status helpers with spinner ---
+    function showLoading(msg) {
+      statusEl.innerHTML = `<span class="spinner"></span> ${msg}`;
+    }
+    function showReady(msg) {
+      statusEl.innerHTML = msg;
+    }
+
+    // --- Build UI toggles ---
+    const infraDiv = document.getElementById('group-infra');
+    const envDiv = document.getElementById('group-env');
+
+    layerConfigs.forEach(cfg => {
+      const row = document.createElement('div');
+      row.className = 'layer-item';
+
+      const labelDiv = document.createElement('div');
+      labelDiv.className = 'layer-label';
+      const colorSpan = document.createElement('span');
+      colorSpan.className = 'layer-color';
+      colorSpan.style.backgroundColor = cfg.color;
+      const textSpan = document.createElement('span');
+      textSpan.textContent = cfg.label;
+      labelDiv.appendChild(colorSpan);
+      labelDiv.appendChild(textSpan);
+
+      const switchLabel = document.createElement('label');
+      switchLabel.className = 'switch';
+      const chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.id = 'chk-' + cfg.id;
+      chk.setAttribute('aria-label', `Toggle ${cfg.label}`);
+      const slider = document.createElement('span');
+      slider.className = 'slider';
+      switchLabel.appendChild(chk);
+      switchLabel.appendChild(slider);
+
+      row.appendChild(labelDiv);
+      row.appendChild(switchLabel);
+
+      if (cfg.group === 'infra') infraDiv.appendChild(row);
+      else if (cfg.group === 'env') envDiv.appendChild(row);
+
+      const lg = L.layerGroup();
+      layerGroups[cfg.id] = lg;
+
+      chk.addEventListener('change', () => {
+        if (chk.checked) {
+          if (cfg.type === 'wfs') {
+            loadWfsLayer(cfg);   // always reload when turned on
+          } else if (cfg.type === 'api-wind') {
+            loadWindLayer();
+          }
+          map.addLayer(lg);
+        } else {
+          map.removeLayer(lg);
+        }
+      });
+    });
+
+    // --- Debounced moveend handler ---
+    const debouncedMoveEnd = debounce(() => {
+      layerConfigs.forEach(cfg => {
+        if (cfg.type === 'wfs' && map.hasLayer(layerGroups[cfg.id])) {
+          loadWfsLayer(cfg);
+        }
+      });
+      if (map.hasLayer(layerGroups['wind'])) {
+        loadWindLayer();
+      }
+    }, 400);
+
+    map.on('moveend', debouncedMoveEnd);
+
+    // --- Reset view button ---
+    document.getElementById('resetViewBtn').addEventListener('click', () => {
+      map.setView(lingnanCoords, 16);
+    });
+
+    // --- 2D / 3D mode toggle (UI only) ---
+    const mode2d = document.getElementById('mode2d');
+    const mode3d = document.getElementById('mode3d');
+    mode2d.addEventListener('click', () => {
+      mode2d.classList.add('active');
+      mode3d.classList.remove('active');
+      showReady('2D map active (3D placeholder)');
+    });
+    mode3d.addEventListener('click', () => {
+      mode3d.classList.add('active');
+      mode2d.classList.remove('active');
+      showReady('3D mode not implemented — staying in 2D');
+    });
+
+    // --- Tab switching: Layers / Preview ---
+    const tabLayers = document.getElementById('tabLayers');
+    const tabPreview = document.getElementById('tabPreview');
+    const layersPanel = document.getElementById('layers-panel');
+    const previewPanel = document.getElementById('preview-panel');
+
+    tabLayers.addEventListener('click', () => {
+      tabLayers.classList.add('active');
+      tabPreview.classList.remove('active');
+      layersPanel.style.display = 'block';
+      previewPanel.style.display = 'none';
+    });
+
+    tabPreview.addEventListener('click', () => {
+      tabPreview.classList.add('active');
+      tabLayers.classList.remove('active');
+      layersPanel.style.display = 'none';
+      previewPanel.style.display = 'block';
+      updatePreviewStats(); // refresh counts when opening preview
+    });
+
+    // Scale bar
+    L.control.scale({ imperial: false, metric: true, position: 'bottomleft' }).addTo(map);
+
+    // Attribution for HKO (additional)
+    map.attributionControl.addAttribution('HKO Open Data');
+
+    showReady('Ready. Use switches to load live CSDI / HKO data.');
+    // Initial preview stats update
+    updatePreviewStats();
+  })();
+</script>
+</body>
+</html>
